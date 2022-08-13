@@ -1,0 +1,110 @@
+---
+title: "Trabalho TPE 2"
+author: "Anna Berggren; Antonio Saicali; Lucas Lenz; Gustavo Lima; Theo Parizzi"  
+date: '2022-07-01'
+output: pdf_document
+---
+### Matrículas(na ordem): 1910510; 1712946; 1910609; 1810370; 1920619
+Pacotes utilizados
+```{r pacotes, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+```
+Importando os dados
+```{r dados, message=FALSE, warning=FALSE}
+train <- read_csv("train.csv")
+test <- read_csv("test.csv")
+
+```
+## Pré-Processamento #1  
+```{r pré-processamento, message=FALSE,warning=FALSE}
+######################### TREINAMENTO ##############################
+media_por_sexo_train = train %>% group_by(Sex) %>% 
+  summarise(media_age = mean(Age,na.rm = TRUE  )) 
+#Age -Substituindo as idades faltantes pelas médias feminina das mulheres e 
+#masculina dos homens (acreditamos que essa diferença, ainda que muito pequena, 
+#possa ser relevante)
+train = train %>%  mutate(Age = ifelse(is.na(Age) & Sex == "female",27.9,
+                          ifelse(is.na(Age) & Sex == "male",30.7 ,Age)))
+
+train$Embarked = ifelse(train$Embarked == " " | is.na(train$Embarked), "S",train$Embarked)
+#Nesse caso, substituimos os vazios e NA do Embarked por "S", que é a maioria da base
+
+#FATORES - Também é fundamental a transformação de algumas variáveis em fatores para a estimação
+train$Pclass = as.factor(train$Pclass)
+train$Sex = as.factor(train$Sex)
+train$Embarked = as.factor(train$Embarked)
+train$Survived = factor(train$Survived)
+
+####################### TESTE #####################################
+#Age
+media_por_sexo_test = test %>% group_by(Sex)  %>% 
+                        summarise(media_age = mean(Age, na.rm=TRUE))
+test = test %>%  mutate(Age = ifelse(is.na(Age) & Sex == "female", 30.2 ,
+                      ifelse(is.na(Age) & Sex == "male", 30.3 ,Age)))
+#FATORES
+test$Pclass = as.factor(test$Pclass)
+test$Sex = as.factor(test$Sex)
+test$Embarked = as.factor(test$Embarked)
+
+#Alterando um NA - Substituimos pela média de Fare o valor NA
+test$Fare = ifelse(is.na(test$Fare), mean(test$Fare, na.rm = TRUE), test$Fare)
+```
+
+## Random Forest #2  
+Fazendo a previsão com modelo Random Forest e construindo o data frame para csv
+```{r randomforest}
+classificador = randomForest( formula = Survived ~ Pclass + Sex + Age + SibSp + Parch 
+      + Fare + Embarked ,data = train, ntree = 200, mtry = 3)
+previsao_randomforest = predict(classificador, newdata = test)
+#DataFrame
+PassengerId = test$PassengerId
+output = as.data.frame(PassengerId)
+output$Survived = previsao_randomforest  %>% as.numeric()
+output$Survived = ifelse(output$Survived ==1,0,1)
+write.csv(output, file ="C:/Users/Lucas/Desktop/TPE 2/RandomForest", row.names = FALSE)
+
+```
+
+## Árvore de Decisão #3  
+Fazendo pelo modelo árvore de decisão e construindo o dataframe para csv. 
+```{r ad, fig.width=5, fig.height=2.5, fig.align='center' }
+arvore = rpart(formula = Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked,
+               data = train)
+rpart.plot(arvore)
+previsao_arvore.decisao = predict(arvore, newdata = test, type = "class")
+#DataFrame
+PassengerId = test$PassengerId
+output_arvore.decisao = as.data.frame(PassengerId)
+output_arvore.decisao$Survived = previsao_arvore.decisao %>% as.numeric()
+output_arvore.decisao$Survived = ifelse(output_arvore.decisao$Survived == 1,0,1)
+write.csv(output_arvore.decisao, file = "C:/Users/Lucas/Desktop/TPE 2/ArvoreDecisao",row.names = FALSE)
+
+```
+## Poda 
+```{r poda,fig.width=5, fig.height=2.5, fig.align='center'  }
+poda = arvore$cptable[which.min(arvore$cptable[, "xerror"]), "CP"]
+print(arvore$cptable)
+poda
+arvore_podada = prune(arvore,cp = poda) #Poda da árvore utilizando o menor erro
+
+```
+## Comentários  
+Na etapa #1, iremos arrumar os dados train e test. Neles, encontramos espaços vazios e valores faltantes(NA). Há 3 possibilidades: deletar informações faltantes; preencher os dados com média ou mediana; usar regressões para preenchimento da base. Optamos por utilizar a média, ainda que isso possa diminuir a variabilidade da base.Utilizamos a média da idade das mulheres nos NA feminino e média da idade dos homens nos NA masculino. Tal escolha permitiu uma melhora nas previsões encontradas (em comparação com uma média única para os dois sexos). Demais substituições de NA estão descritas no código, mas tentando seguir um padrão de maioria da base ou de média dos valores.  
+Na etapa #2, com RandomForest, testamos várias opções de números de árvores e consideramos fazer com 200 para ser o número de árvores, a partir de um certo número de árvores os valores não irão mudar muito (não se causa overfitting ao escolher muitas árvores, reduz a variância do estimador uma vez que são descorrelacionadas).Consideramos uma quantidade em que o erro se mostra estável.  
+A escolha mtry = 3, pois temos 7 variáveis -> sqrt(7) é 2,64 ~ 3 -> raiz do número de preditores.Com *Random Forest*:**Nossa previsão foi de 77,75%**  
+Na etapa #3, realizamos *Árvore de Decisão*. **Nossa previsão foi de 77,99%**  
+Além disso, também utilizamos código para realizar poda da árvore.Cortamos o valor de menor erro possível localizado na tabela gerada por `print(arvore$cptable)`. No caso, encontramos **0,01**. A árvore gerada com a poda não difere muito da sem poda. Como o valor é muito pequeno, não se encontra mais o que podar. O algoritmo se adaptou bem com a parametrização padrão.
+Porquê da poda? Uma poda evita overfitting e evita que pequenas mudanças nos dados possam mudar a árvore, uma vez que os ramos inferiores podem ser mais especializados.  
+  
+**Sobre a escolha e os modelos:** A Árvore de Decisão é a criação de um modelo com a estrutura de uma árvore junto com nós de decisão e nós folha. Os nós de decisão estão na ordem de dois ou mais ramos, enquanto o nó folha representa uma decisão, sendo um diagrama de tomada de decisão simples que proporciona a visualização dos resultados e entender como as decisões são tomadas.
+A Random Forest constrói árvores de decisão individuais e, em seguida, calcula a média dessas previsões, este grupo é uma floresta onde cada árvore tem uma amostra aleatória,  e nesta floresta as árvores são não-correlacionadas entre si, tendo menores chances de ser afetada por valores divergentes.  
+Pelos nossos resultados, o modelo de Árvore de Decisão apresentou uma probabilidade levemente maior do que a Random Forests. As *vantagens* da Árvore envolvem:fácil interpretação; não precisa normalização ou padronização; rápido para classificar novos registros.  
+No entanto também vale ressaltar as *desvantagens*: geração de árvores muito complexas;pequenas mudanças nos dados pode mudar a árvore (poda pode ajudar);problema NP-completo para construir a árvore. Nesses casos, a Random Forest pode oferecer vantagens como a criação de árvores descorrelacionadas (como já foi mencionado) que é importante para reduzir a variância.E como elas trabalham com subconjuntos aleatórios das características e constrói árvores menores a partir de tais subconjuntos, acabam evitando o overfitting na maioria dos casos.  
+Obs: Não utilizamos escalonamento, mas sabemos que ele pode contribuir positivamente para o modelo de Random Forest.Talvez (é possível) que o não uso desse procedimento tenha prejudicado um pouco a estimação do modelo RF.
+
+
+
