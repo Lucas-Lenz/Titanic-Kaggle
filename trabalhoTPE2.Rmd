@@ -4,7 +4,6 @@ author: "Anna Berggren; Antonio Saicali; Lucas Lenz; Gustavo Lima; Theo Parizzi"
 date: '2022-07-01'
 output: pdf_document
 ---
-### Matrículas(na ordem): 1910510; 1712946; 1910609; 1810370; 1920619
 Pacotes utilizados
 ```{r pacotes, message=FALSE, warning=FALSE}
 library(tidyverse)
