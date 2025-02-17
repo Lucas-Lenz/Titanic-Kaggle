@@ -4,7 +4,7 @@ Machine Learning Kaggle: creating a model (or models) that predicts the survival
 tradução:
 Machine Learning Kaggle: criação de modelo(s) que prevê a taxa de sobrevivência de determinados tripulantes no desastre do Titanic.
 
-# Comments in English:
+## Comments in English:
 
 Step #1: Data Cleaning
 In this step, we processed the train and test datasets, which contained empty spaces and missing values (NA). We considered three possible approaches:
